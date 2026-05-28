@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "OsKHJBCe14M=",
+  "success": true,
+  "projectFilePath": "/workspaces/BasuCodi10/Act-10-Codigo/Farmacia2/Farmacia2.csproj",
+  "expectedPackageFiles": [
+    "/home/codespace/.nuget/packages/npgsql/10.0.0/npgsql.10.0.0.nupkg.sha512"
+  ],
+  "logs": []
+}
