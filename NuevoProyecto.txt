@@ -1,0 +1,765 @@
+
+ Instalado extensiones necesarias en Codespaces
+En la barra lateral izquierda (Extensiones Ctrl+Shift+X), instala:
+
+Extensión	Buscar	Para qué sirve
+C# Dev Kit	C# Dev Kit	Desarrollo C# en VS Code
+SQLTools	SQLTools	Conectar a PostgreSQL
+SQLTools PostgreSQL	SQLTools PostgreSQL Driver	Driver para PostgreSQL
+NuGet Gallery	NuGet Gallery	Manejar paquetes NuGet
+Paso 4: Crear el proyecto ASP.NET Core MVC
+Abre Terminal (Ctrl+Ñ) y ejecuta:
+
+bash
+# Crear proyecto MVC
+dotnet new mvc -n FarmaciaMVC --framework net8.0
+
+# Entrar a la carpeta
+cd FarmaciaMVC
+
+# Agregar paquete Npgsql (para PostgreSQL)
+dotnet add package Npgsql
+
+# Restaurar dependencias
+dotnet restore
+Paso 5: Crear la base de datos PostgreSQL en Codespaces
+5.1 Instalar PostgreSQL en Codespaces
+bash
+# Actualizar paquetes
+sudo apt update
+
+# Instalar PostgreSQL
+sudo apt install postgresql postgresql-contrib -y
+
+# Iniciar servicio
+sudo service postgresql start
+
+# Verificar que está corriendo
+sudo service postgresql status
+5.2 Configurar PostgreSQL
+bash
+# Cambiar a usuario postgres
+sudo -u postgres psql
+Dentro de PostgreSQL (postgres=#), ejecuta:
+
+sql
+-- Crear base de datos
+CREATE DATABASE farmacia_db;
+
+-- Crear usuario
+CREATE USER farmacia_user WITH PASSWORD 'farmacia123';
+
+-- Dar permisos
+GRANT ALL PRIVILEGES ON DATABASE farmacia_db TO farmacia_user;
+
+-- Salir
+\q
+5.3 Ejecutar script SQL completo
+Crear el archivo del script:
+
+bash
+cat > script.sql << 'EOF'
+-- ============================================
+-- SCRIPT COMPLETO PARA FARMACIA
+-- ============================================
+
+-- 1. TABLAS SIN FK (independientes)
+CREATE TABLE proveedor (
+    id_proveedor SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    telefono VARCHAR(20) NOT NULL,
+    direccion VARCHAR(200),
+    correo VARCHAR(100),
+    activo BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE cajero (
+    id_cajero SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    apellido VARCHAR(100) NOT NULL,
+    usuario VARCHAR(50) NOT NULL UNIQUE,
+    clave VARCHAR(255) NOT NULL,
+    rol VARCHAR(20) NOT NULL DEFAULT 'cajero',
+    activo BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE cliente (
+    id_cliente SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    apellido VARCHAR(100) NOT NULL,
+    ci VARCHAR(20) UNIQUE NOT NULL,
+    telefono VARCHAR(20),
+    correo VARCHAR(100)
+);
+
+-- 2. TABLAS CON FK
+CREATE TABLE producto (
+    id_producto SERIAL PRIMARY KEY,
+    codigo VARCHAR(20) UNIQUE NOT NULL,
+    nombre VARCHAR(100) NOT NULL,
+    precio DECIMAL(10,2) NOT NULL CHECK (precio > 0),
+    stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0),
+    stock_minimo INT DEFAULT 10,
+    vencimiento DATE,
+    id_proveedor INT NOT NULL REFERENCES proveedor(id_proveedor) ON DELETE RESTRICT
+);
+
+CREATE TABLE venta (
+    id_venta SERIAL PRIMARY KEY,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    total DECIMAL(12,2) DEFAULT 0,
+    metodo_pago VARCHAR(20) CHECK (metodo_pago IN ('efectivo','tarjeta','transferencia','qr')),
+    estado VARCHAR(20) DEFAULT 'completada',
+    id_cajero INT NOT NULL REFERENCES cajero(id_cajero),
+    id_cliente INT REFERENCES cliente(id_cliente) ON DELETE SET NULL
+);
+
+CREATE TABLE detalle_venta (
+    id_detalle SERIAL PRIMARY KEY,
+    cantidad INT NOT NULL CHECK (cantidad > 0),
+    precio_unitario DECIMAL(10,2) NOT NULL,
+    subtotal DECIMAL(10,2) NOT NULL,
+    id_venta INT NOT NULL REFERENCES venta(id_venta) ON DELETE CASCADE,
+    id_producto INT NOT NULL REFERENCES producto(id_producto) ON DELETE RESTRICT
+);
+
+-- 3. INSERCIÓN DE DATOS (mínimo 5 por tabla)
+INSERT INTO proveedor (nombre, telefono, direccion, correo) VALUES
+('Laboratorios Bagó', '2-2441234', 'Av. Montes 123, La Paz', 'ventas@bago.com'),
+('Inti Pharmaceutical', '2-2789012', 'Calle Loayza 456, La Paz', 'info@inti.com'),
+('Droguería Cóndor', '4-4521890', 'Av. Blanco Galindo, Cochabamba', 'condor@drogueria.com'),
+('Laboratorios Sigma', '3-3345678', 'Calle Sucre 789, Santa Cruz', 'sigma@lab.com'),
+('Distribuidora Med', '2-2901234', 'Av. Arce 321, La Paz', 'med@bolivia.com');
+
+INSERT INTO cajero (nombre, apellido, usuario, clave, rol) VALUES
+('Rolo', 'Huarachi', 'rolo.admin', 'clave123', 'administrador'),
+('María', 'Flores', 'maria.cajero', 'clave456', 'cajero'),
+('Carlos', 'Mamani', 'carlos.cajero', 'clave789', 'cajero'),
+('Lucía', 'Condori', 'lucia.cajero', 'clave321', 'cajero'),
+('Pedro', 'Vargas', 'pedro.cajero', 'clave654', 'cajero');
+
+INSERT INTO cliente (nombre, apellido, ci, telefono, correo) VALUES
+('Juan', 'Perez', '12345678', '71234567', 'juan@mail.com'),
+('Ana', 'Lopez', '87654321', '79876543', 'ana@mail.com'),
+('Roberto', 'Quispe', '11223344', '76543210', 'roberto@mail.com'),
+('Carmen', 'Tarqui', '55667788', '72345678', 'carmen@mail.com'),
+('Luis', 'Choque', '99887766', '78901234', 'luis@mail.com');
+
+INSERT INTO producto (codigo, nombre, precio, stock, stock_minimo, vencimiento, id_proveedor) VALUES
+('MED001', 'Paracetamol 500mg', 2.50, 100, 20, '2027-12-31', 1),
+('MED002', 'Ibuprofeno 400mg', 3.00, 5, 15, '2026-06-15', 2),
+('MED003', 'Amoxicilina 500mg', 12.50, 142, 20, '2027-03-15', 1),
+('MED004', 'Omeprazol 20mg', 8.00, 8, 10, '2026-09-30', 4),
+('MED005', 'Metformina 850mg', 15.00, 34, 10, '2027-06-30', 3);
+
+INSERT INTO venta (fecha, total, metodo_pago, estado, id_cajero, id_cliente) VALUES
+('2026-05-26 09:15:00', 25.00, 'efectivo', 'completada', 2, 1),
+('2026-05-26 10:30:00', 15.00, 'tarjeta', 'completada', 2, 2),
+('2026-05-26 11:45:00', 50.00, 'efectivo', 'completada', 3, NULL),
+('2026-05-26 14:00:00', 8.00, 'qr', 'completada', 3, 3),
+('2026-05-26 15:20:00', 30.00, 'transferencia', 'completada', 4, 4);
+
+INSERT INTO detalle_venta (cantidad, precio_unitario, subtotal, id_venta, id_producto) VALUES
+(10, 2.50, 25.00, 1, 1),
+(1, 15.00, 15.00, 2, 5),
+(2, 25.00, 50.00, 3, 2),
+(1, 8.00, 8.00, 4, 4),
+(2, 15.00, 30.00, 5, 5);
+
+-- 4. CONSULTAS DE VERIFICACIÓN
+SELECT '=== PRODUCTOS ===' AS info;
+SELECT id_producto, codigo, nombre, precio, stock FROM producto;
+
+SELECT '=== VENTAS ===' AS info;
+SELECT v.id_venta, v.fecha, v.total, c.nombre || ' ' || c.apellido AS cajero, cl.nombre AS cliente
+FROM venta v
+JOIN cajero c ON v.id_cajero = c.id_cajero
+LEFT JOIN cliente cl ON v.id_cliente = cl.id_cliente;
+
+SELECT '=== STOCK BAJO ===' AS info;
+SELECT nombre, stock, stock_minimo FROM producto WHERE stock <= stock_minimo;
+EOF
+Ejecutar el script:
+
+bash
+sudo -u postgres psql -d farmacia_db -f script.sql
+Paso 6: Crear la estructura del proyecto C#
+bash
+# Crear carpetas
+cd FarmaciaMVC
+mkdir Models
+mkdir DAO
+mkdir Controllers
+mkdir Views
+mkdir Views/Producto
+Paso 7: Código completo del proyecto
+7.1 Clase de conexión - DAO/ConexionDB.cs
+csharp
+using Npgsql;
+
+namespace FarmaciaMVC.DAO
+{
+    public static class ConexionBD
+    {
+        // Cadena de conexión para Codespaces
+        private static string connectionString = "Host=localhost;Port=5432;Database=farmacia_db;Username=farmacia_user;Password=farmacia123;";
+
+        public static NpgsqlConnection GetConnection()
+        {
+            var conn = new NpgsqlConnection(connectionString);
+            conn.Open();
+            return conn;
+        }
+
+        public static void TestConnection()
+        {
+            try
+            {
+                using var conn = GetConnection();
+                Console.WriteLine("✅ Conexión exitosa a PostgreSQL");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error de conexión: {ex.Message}");
+                throw;
+            }
+        }
+    }
+}
+7.2 Modelo/Entidad - Models/Producto.cs
+csharp
+namespace FarmaciaMVC.Models
+{
+    public class Producto
+    {
+        public int IdProducto { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
+        public decimal Precio { get; set; }
+        public int Stock { get; set; }
+        public int StockMinimo { get; set; }
+        public DateTime? Vencimiento { get; set; }
+        public int IdProveedor { get; set; }
+        public string? NombreProveedor { get; set; } // Para mostrar en listado
+    }
+}
+7.3 DAO - DAO/ProductoDAO.cs
+7.3 DAO - DAO/ProductoDAO.cs
+csharp
+using Npgsql;
+using FarmaciaMVC.Models;
+using System.Data;
+
+namespace FarmaciaMVC.DAO
+{
+    public class ProductoDAO
+    {
+        // ✅ MÉTODO INSERTAR (para registro)
+        public bool Insertar(Producto producto)
+        {
+            try
+            {
+                using var conexion = ConexionBD.GetConnection();
+                string sql = @"INSERT INTO producto (codigo, nombre, precio, stock, stock_minimo, vencimiento, id_proveedor) 
+                               VALUES (@codigo, @nombre, @precio, @stock, @stock_minimo, @vencimiento, @idProveedor)";
+
+                using var cmd = new NpgsqlCommand(sql, conexion);
+                cmd.Parameters.AddWithValue("@codigo", producto.Codigo);
+                cmd.Parameters.AddWithValue("@nombre", producto.Nombre);
+                cmd.Parameters.AddWithValue("@precio", producto.Precio);
+                cmd.Parameters.AddWithValue("@stock", producto.Stock);
+                cmd.Parameters.AddWithValue("@stock_minimo", producto.StockMinimo);
+                cmd.Parameters.AddWithValue("@vencimiento", producto.Vencimiento ?? (object)DBNull.Value);
+                cmd.Parameters.AddWithValue("@idProveedor", producto.IdProveedor);
+
+                int resultado = cmd.ExecuteNonQuery();
+                return resultado > 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error en Insertar: {ex.Message}");
+                return false;
+            }
+        }
+
+        // ✅ MÉTODO LISTAR TODOS (para el DataGridView/Tabla)
+        public List<Producto> ListarTodos()
+        {
+            var lista = new List<Producto>();
+            try
+            {
+                using var conexion = ConexionBD.GetConnection();
+                string sql = @"SELECT p.id_producto, p.codigo, p.nombre, p.precio, p.stock, p.stock_minimo, p.vencimiento, p.id_proveedor, pr.nombre AS nombre_proveedor
+                               FROM producto p
+                               JOIN proveedor pr ON p.id_proveedor = pr.id_proveedor
+                               ORDER BY p.nombre";
+
+                using var cmd = new NpgsqlCommand(sql, conexion);
+                using var reader = cmd.ExecuteReader();
+
+                while (reader.Read())
+                {
+                    lista.Add(new Producto
+                    {
+                        IdProducto = reader.GetInt32(0),
+                        Codigo = reader.GetString(1),
+                        Nombre = reader.GetString(2),
+                        Precio = reader.GetDecimal(3),
+                        Stock = reader.GetInt32(4),
+                        StockMinimo = reader.GetInt32(5),
+                        Vencimiento = reader.IsDBNull(6) ? null : reader.GetDateTime(6),
+                        IdProveedor = reader.GetInt32(7),
+                        NombreProveedor = reader.GetString(8)
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error en ListarTodos: {ex.Message}");
+            }
+            return lista;
+        }
+
+        // Método adicional: Obtener producto por ID
+        public Producto? ObtenerPorId(int id)
+        {
+            try
+            {
+                using var conexion = ConexionBD.GetConnection();
+                string sql = "SELECT id_producto, codigo, nombre, precio, stock, stock_minimo, vencimiento, id_proveedor FROM producto WHERE id_producto = @id";
+                using var cmd = new NpgsqlCommand(sql, conexion);
+                cmd.Parameters.AddWithValue("@id", id);
+
+                using var reader = cmd.ExecuteReader();
+                if (reader.Read())
+                {
+                    return new Producto
+                    {
+                        IdProducto = reader.GetInt32(0),
+                        Codigo = reader.GetString(1),
+                        Nombre = reader.GetString(2),
+                        Precio = reader.GetDecimal(3),
+                        Stock = reader.GetInt32(4),
+                        StockMinimo = reader.GetInt32(5),
+                        Vencimiento = reader.IsDBNull(6) ? null : reader.GetDateTime(6),
+                        IdProveedor = reader.GetInt32(7)
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error en ObtenerPorId: {ex.Message}");
+            }
+            return null;
+        }
+    }
+}
+7.4 Controlador - Controllers/ProductoController.cs
+csharp
+using Microsoft.AspNetCore.Mvc;
+using FarmaciaMVC.Models;
+using FarmaciaMVC.DAO;
+
+namespace FarmaciaMVC.Controllers
+{
+    public class ProductoController : Controller
+    {
+        private readonly ProductoDAO _productoDAO = new ProductoDAO();
+
+        // GET: Producto/Listado - Muestra la tabla con todos los productos
+        public IActionResult Listado()
+        {
+            var productos = _productoDAO.ListarTodos();
+            return View(productos);
+        }
+
+        // GET: Producto/Create - Muestra el formulario de registro
+        public IActionResult Create()
+        {
+            return View();
+        }
+
+        // POST: Producto/Create - Guarda el nuevo producto
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult Create(Producto producto)
+        {
+            try
+            {
+                // Validaciones
+                if (string.IsNullOrWhiteSpace(producto.Codigo))
+                    ModelState.AddModelError("Codigo", "El código es obligatorio");
+
+                if (string.IsNullOrWhiteSpace(producto.Nombre))
+                    ModelState.AddModelError("Nombre", "El nombre es obligatorio");
+
+                if (producto.Precio <= 0)
+                    ModelState.AddModelError("Precio", "El precio debe ser mayor a 0");
+
+                if (producto.Stock < 0)
+                    ModelState.AddModelError("Stock", "El stock no puede ser negativo");
+
+                if (producto.IdProveedor <= 0)
+                    ModelState.AddModelError("IdProveedor", "ID de proveedor inválido (debe ser 1-5)");
+
+                if (!ModelState.IsValid)
+                    return View(producto);
+
+                bool guardado = _productoDAO.Insertar(producto);
+
+                if (guardado)
+                {
+                    TempData["Mensaje"] = "✅ Producto registrado correctamente";
+                    return RedirectToAction("Listado"); // Redirige al listado para ver el nuevo registro
+                }
+                else
+                {
+                    ViewBag.Error = "No se pudo guardar el producto";
+                }
+            }
+            catch (Exception ex)
+            {
+                ViewBag.Error = "Error: " + ex.Message;
+            }
+            return View(producto);
+        }
+
+        // POST: Producto/ActualizarListado - Recarga la tabla (para AJAX)
+        [HttpPost]
+        public IActionResult ActualizarListado()
+        {
+            var productos = _productoDAO.ListarTodos();
+            return PartialView("_TablaProductos", productos);
+        }
+    }
+}
+7.5 VISTA de Listado - Views/Producto/Listado.cshtml
+html
+@model IEnumerable<FarmaciaMVC.Models.Producto>
+
+@{
+    ViewData["Title"] = "Listado de Productos";
+    Layout = "_Layout";
+}
+
+<div class="container mt-4">
+    <h1 class="text-primary">📋 Listado de Productos</h1>
+    <hr />
+
+    @if (TempData["Mensaje"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Mensaje"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <a asp-action="Create" class="btn btn-success">
+                <i class="bi bi-plus-circle"></i> + Nuevo Producto
+            </a>
+        </div>
+        <div class="col-md-6 text-end">
+            <button id="btnActualizar" class="btn btn-warning">
+                <i class="bi bi-arrow-repeat"></i> 🔄 Actualizar
+            </button>
+        </div>
+    </div>
+
+    <div class="table-responsive" id="tablaContainer">
+        @await Html.PartialAsync("_TablaProductos", Model)
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('#btnActualizar').click(function() {
+                $.ajax({
+                    url: '@Url.Action("ActualizarListado", "Producto")',
+                    type: 'POST',
+                    success: function(data) {
+                        $('#tablaContainer').html(data);
+                    },
+                    error: function() {
+                        alert('Error al actualizar los datos');
+                    }
+                });
+            });
+        });
+    </script>
+}
+7.6 Vista Parcial de la Tabla - Views/Producto/_TablaProductos.cshtml
+html
+@model IEnumerable<FarmaciaMVC.Models.Producto>
+
+<table class="table table-striped table-hover table-bordered">
+    <thead class="table-dark">
+        <tr>
+            <th>ID</th>
+            <th>Código</th>
+            <th>Nombre</th>
+            <th>Precio (Bs)</th>
+            <th>Stock</th>
+            <th>Stock Mínimo</th>
+            <th>Vencimiento</th>
+            <th>Proveedor</th>
+            <th>Estado</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Model != null && Model.Any())
+        {
+            foreach (var producto in Model)
+            {
+                <tr>
+                    <td>@producto.IdProducto</td>
+                    <td>@producto.Codigo</td>
+                    <td>@producto.Nombre</td>
+                    <td class="text-end">@producto.Precio.ToString("N2")</td>
+                    <td class="text-end">
+                        @if (producto.Stock <= producto.StockMinimo)
+                        {
+                            <span class="badge bg-danger">⚠️ @producto.Stock</span>
+                        }
+                        else
+                        {
+                            <span>@producto.Stock</span>
+                        }
+                    </td>
+                    <td>@producto.StockMinimo</td>
+                    <td>@(producto.Vencimiento?.ToString("dd/MM/yyyy") ?? "Sin vencimiento")</td>
+                    <td>@producto.NombreProveedor</td>
+                    <td>
+                        @if (producto.Stock <= producto.StockMinimo)
+                        {
+                            <span class="badge bg-danger">Stock Bajo</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-success">OK</span>
+                        }
+                    </td>
+                </tr>
+            }
+        }
+        else
+        {
+            <tr>
+                <td colspan="9" class="text-center text-muted">
+                    No hay productos registrados
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+7.7 VISTA de Registro - Views/Producto/Create.cshtml
+html
+@model FarmaciaMVC.Models.Producto
+
+@{
+    ViewData["Title"] = "Registrar Producto";
+    Layout = "_Layout";
+}
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">📦 Registrar Nuevo Producto</h3>
+                </div>
+                <div class="card-body">
+                    @if (ViewBag.Error != null)
+                    {
+                        <div class="alert alert-danger">@ViewBag.Error</div>
+                    }
+
+                    <form asp-action="Create" method="post">
+                        @Html.AntiForgeryToken()
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="Codigo" class="form-label fw-bold">Código *</label>
+                                <input asp-for="Codigo" class="form-control" placeholder="Ej: MED001" />
+                                <span asp-validation-for="Codigo" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="Nombre" class="form-label fw-bold">Nombre *</label>
+                                <input asp-for="Nombre" class="form-control" placeholder="Nombre del producto" />
+                                <span asp-validation-for="Nombre" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <label asp-for="Precio" class="form-label fw-bold">Precio (Bs) *</label>
+                                <input asp-for="Precio" type="number" step="0.01" class="form-control" placeholder="0.00" />
+                                <span asp-validation-for="Precio" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <label asp-for="Stock" class="form-label fw-bold">Stock *</label>
+                                <input asp-for="Stock" type="number" class="form-control" placeholder="0" />
+                                <span asp-validation-for="Stock" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <label asp-for="StockMinimo" class="form-label fw-bold">Stock Mínimo</label>
+                                <input asp-for="StockMinimo" type="number" class="form-control" placeholder="10" />
+                                <span asp-validation-for="StockMinimo" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="Vencimiento" class="form-label fw-bold">Fecha Vencimiento</label>
+                                <input asp-for="Vencimiento" type="date" class="form-control" />
+                                <span asp-validation-for="Vencimiento" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="IdProveedor" class="form-label fw-bold">ID Proveedor *</label>
+                                <select asp-for="IdProveedor" class="form-select">
+                                    <option value="">Seleccione...</option>
+                                    <option value="1">1 - Laboratorios Bagó</option>
+                                    <option value="2">2 - Inti Pharmaceutical</option>
+                                    <option value="3">3 - Droguería Cóndor</option>
+                                    <option value="4">4 - Laboratorios Sigma</option>
+                                    <option value="5">5 - Distribuidora Med</option>
+                                </select>
+                                <span asp-validation-for="IdProveedor" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <hr />
+                        <div class="text-end">
+                            <a asp-action="Listado" class="btn btn-secondary">Cancelar</a>
+                            <button type="submit" class="btn btn-primary ms-2">💾 Guardar Producto</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+7.8 Layout actualizado - Views/Shared/_Layout.cshtml
+html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Farmacia MVC</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body { background-color: #f5f5f5; }
+        .navbar-brand { font-weight: bold; }
+        footer { margin-top: 50px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" asp-controller="Home" asp-action="Index">
+                🏥 Farmacia Sistema MVC
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" asp-controller="Producto" asp-action="Listado">
+                            📋 Listado Productos
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" asp-controller="Producto" asp-action="Create">
+                            ➕ Registrar Producto
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        @RenderBody()
+    </main>
+
+    <footer class="text-center text-muted py-3 border-top mt-4">
+        <div class="container">
+            &copy; 2026 - Farmacia MVC - Sistema de Información I
+        </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+7.9 HomeController actualizado - Controllers/HomeController.cs
+csharp
+using Microsoft.AspNetCore.Mvc;
+
+namespace FarmaciaMVC.Controllers
+{
+    public class HomeController : Controller
+    {
+        public IActionResult Index()
+        {
+            return RedirectToAction("Listado", "Producto");
+        }
+
+        public IActionResult Privacy()
+        {
+            return View();
+        }
+    }
+}
+Paso 8: Modificar Program.cs para usar las vistas
+bash
+cat > Program.cs << 'EOF'
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllersWithViews();
+
+var app = builder.Build();
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+app.UseRouting();
+app.UseAuthorization();
+
+app.MapControllerRoute(
+    name: "default",
+    pattern: "{controller=Producto}/{action=Listado}/{id?}");
+
+app.Run();
+EOF
+Paso 9: Compilar y ejecutar
+bash
+# Verificar que PostgreSQL está corriendo
+sudo service postgresql status
+
+# Compilar
+dotnet build
+
+# Ejecutar
+dotnet run --urls="http://0.0.0.0:5000"
+Paso 10: Ver la aplicación en el navegador
+En Codespaces, cuando ejecutes dotnet run, aparecerá un mensaje:
+
+text
+Now listening on: http://localhost:5000
+Haz clic en el botón "Open in Browser" o ve a la pestaña "Ports" y abre el puerto 5000.
